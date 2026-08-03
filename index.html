@@ -61,6 +61,8 @@
   details summary::-webkit-details-marker{display:none}
   .hint{color:var(--muted); font-size:12px; text-align:center; padding-bottom:10px}
   .hide{display:none !important}
+  a.waze{color:var(--accent); font-size:12px; text-decoration:none; margin-left:4px; white-space:nowrap}
+  a.waze:active{opacity:.6}
 </style>
 </head>
 <body>
@@ -94,7 +96,7 @@
     <!-- TRIP fields -->
     <div id="tripFields" class="card" style="padding:0;border:0;gap:12px">
       <div class="row"><label>Arrival time</label><input type="time" id="arrival" value="09:30"></div>
-      <div class="row"><label>Travel (Waze min)</label><input type="number" id="travel" min="0" value="50"></div>
+      <div class="row"><label>Travel (Waze min) <a class="waze" href="https://www.waze.com/live-map" target="_blank" rel="noopener">check Waze ↗</a></label><input type="number" id="travel" min="0" value="50"></div>
       <div class="row"><label>Prep buffer (min)</label><input type="number" id="prep" min="0" value="10"></div>
       <div class="row"><label>Wake-early margin (min)</label><input type="number" id="margin" min="0" value="20"></div>
     </div>
