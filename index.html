@@ -166,10 +166,10 @@ const $ = s => document.querySelector(s);
 const state = JSON.parse(localStorage.getItem('sp') || '{}');
 
 const OPS = [
-  { id:'margin',   label:'⏰ Wake-early margin', min:10 },
-  { id:'shower',   label:'🚿 Shower',           min:15 },
-  { id:'lunch',    label:'🥪 Pack lunch',        min:15 },
-  { id:'bathroom', label:'💩 Bathroom',          min:10 },
+  { id:'margin',   label:'⏰ Wake-early margin', min:10, movable:false },
+  { id:'shower',   label:'🚿 Shower',           min:15, movable:true  },
+  { id:'lunch',    label:'🥪 Pack lunch',        min:15, movable:true  },
+  { id:'bathroom', label:'💩 Bathroom',          min:10, movable:false },
 ];
 
 const D = {
@@ -185,9 +185,9 @@ const D = {
 };
 
 // morning prep. excludeTonight = pretend the 🌙-flagged ops are already done → less morning time.
-function prepSum(excludeTonight){ return OPS.reduce((s,o)=> (D.ops[o.id] && !(excludeTonight && D.tonight[o.id])) ? s+o.min : s, 0); }
+function prepSum(excludeTonight){ return OPS.reduce((s,o)=> (D.ops[o.id] && !(excludeTonight && o.movable && D.tonight[o.id])) ? s+o.min : s, 0); }
 function prepMins(){ return prepSum(false); }
-function anyTonight(){ return OPS.some(o=> D.ops[o.id] && D.tonight[o.id]); }
+function anyTonight(){ return OPS.some(o=> D.ops[o.id] && o.movable && D.tonight[o.id]); }
 
 function save(){ localStorage.setItem('sp', JSON.stringify(D)); }
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -317,19 +317,25 @@ function renderOps(){
     const row = document.createElement('div'); row.className='oprow';
     const lab = document.createElement('div'); lab.className='oplabel'; lab.textContent=o.label;
 
-    const moon = document.createElement('button'); moon.className='moon'; moon.textContent='🌙';
-    moon.title='Do tonight (before bed)';
-    moon.setAttribute('aria-pressed', !!D.tonight[o.id]);
-
     const btn = document.createElement('button'); btn.className='op'; btn.textContent='+'+o.min+'m';
     btn.setAttribute('aria-pressed', !!D.ops[o.id]);
 
-    const syncMoon = ()=>{ moon.classList.toggle('hide', !D.ops[o.id]); };
-    btn.onclick  = ()=>{ D.ops[o.id] = !D.ops[o.id]; btn.setAttribute('aria-pressed', D.ops[o.id]); syncMoon(); save(); render(); };
-    moon.onclick = ()=>{ D.tonight[o.id] = !D.tonight[o.id]; moon.setAttribute('aria-pressed', D.tonight[o.id]); save(); render(); };
-    syncMoon();
+    const right = document.createElement('div'); right.className='opright';
 
-    const right = document.createElement('div'); right.className='opright'; right.append(moon, btn);
+    if(o.movable){
+      const moon = document.createElement('button'); moon.className='moon'; moon.textContent='🌙';
+      moon.title='Do tonight (before bed)';
+      moon.setAttribute('aria-pressed', !!D.tonight[o.id]);
+      const syncMoon = ()=>{ moon.classList.toggle('hide', !D.ops[o.id]); };
+      btn.onclick  = ()=>{ D.ops[o.id] = !D.ops[o.id]; btn.setAttribute('aria-pressed', D.ops[o.id]); syncMoon(); save(); render(); };
+      moon.onclick = ()=>{ D.tonight[o.id] = !D.tonight[o.id]; moon.setAttribute('aria-pressed', D.tonight[o.id]); save(); render(); };
+      syncMoon();
+      right.append(moon);
+    } else {
+      btn.onclick = ()=>{ D.ops[o.id] = !D.ops[o.id]; btn.setAttribute('aria-pressed', D.ops[o.id]); save(); render(); };
+    }
+
+    right.append(btn);
     row.append(lab, right); wrap.append(row);
   });
 }
