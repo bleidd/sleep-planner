@@ -63,6 +63,20 @@
   .hide{display:none !important}
   a.waze{color:var(--accent); font-size:12px; text-decoration:none; margin-left:4px; white-space:nowrap}
   a.waze:active{opacity:.6}
+  button.alarm{
+    width:100%; padding:14px; border:1px solid var(--accent); background:var(--panel2); color:var(--ink);
+    border-radius:14px; font-weight:700; font-size:16px;
+  }
+  button.alarm:active{opacity:.7}
+  button.alarm span{color:var(--muted); font-weight:500; font-size:13px}
+  .alarmRow{display:flex; gap:10px}
+  .alarmRow .alarm{flex:1; text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:6px}
+  a.alarm.ics{border-color:var(--good); color:var(--ink)}
+  #alarmHelp summary{color:var(--muted); font-size:12px; cursor:pointer; list-style:none; text-align:center}
+  #alarmHelp summary::-webkit-details-marker{display:none}
+  #alarmHelp ol{color:var(--muted); font-size:13px; padding-left:20px; margin:8px 0}
+  #alarmHelp li{margin:4px 0}
+  #alarmHelp .warn2{color:var(--warn); font-size:12px; margin:6px 0 0}
 </style>
 </head>
 <body>
@@ -83,6 +97,20 @@
     <div class="tile" id="tileWake"><div class="k">Wake / alarm</div><div class="v" id="wakeV">—</div></div>
     <div class="tile hi"><div class="k">Be asleep by</div><div class="v" id="sleepV">—</div></div>
   </div>
+
+  <div class="alarmRow">
+    <button id="alarmBtn" class="alarm">⏰ Timer <span id="alarmMins"></span></button>
+    <a id="icsBtn" class="alarm ics" href="#">📅 Calendar</a>
+  </div>
+  <details id="alarmHelp"><summary>Calendar works instantly · Timer needs 1-time Shortcut setup ↗</summary>
+    <ol>
+      <li>Open <b>Shortcuts</b> app → <b>+</b> new shortcut.</li>
+      <li>Name it exactly <b>Sleep Wake</b>.</li>
+      <li>Add action <b>Start Timer</b>. Tap its duration → choose <b>Minutes</b>, then set the number field to the shortcut's <b>Shortcut Input</b> (magic variable).</li>
+      <li>Done. Button above now starts a timer for minutes-until-wake — fires alarm sound at wake (loud, overrides silent).</li>
+    </ol>
+    <p class="warn2">Timer = single loud fire, no snooze. iOS has no web/Shortcut way to set a true repeating alarm.</p>
+  </details>
 
   <div class="card">
     <div class="row">
@@ -169,6 +197,11 @@ function render(){
   $('#wakeV').textContent = fmt(c.wake);
   $('#sleepV').textContent = fmt(c.asleepBy);
 
+  const wakeMin = Math.round((c.wake.getTime() - new Date().getTime())/6e4);
+  $('#alarmMins').textContent = wakeMin > 0
+    ? '· in ' + (wakeMin>=60 ? Math.floor(wakeMin/60)+'h '+(wakeMin%60)+'m' : wakeMin+'m')
+    : '';
+
   const box = $('#count'), big = $('#cdBig'), sub = $('#cdSub'), label = $('#cdLabel');
   box.classList.remove('good','warn','bad');
 
@@ -236,6 +269,30 @@ bind('#margin','margin',true);
 bind('#wakeTime','wakeTime',false);
 bind('#lag','lag',true);
 bind('#customH','customH',true);
+
+// --- alarm: Shortcut timer (B) + ICS calendar (A) ---
+function icsLocal(d){ return d.getFullYear()+pad(d.getMonth()+1)+pad(d.getDate())+'T'+pad(d.getHours())+pad(d.getMinutes())+'00'; }
+function icsUTC(d){ return d.getUTCFullYear()+pad(d.getUTCMonth()+1)+pad(d.getUTCDate())+'T'+pad(d.getUTCHours())+pad(d.getUTCMinutes())+pad(d.getUTCSeconds())+'Z'; }
+function buildICS(wake){
+  return [
+    'BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//sleep-planner//EN','CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT','UID:sp-'+wake.getTime()+'@sleep-planner','DTSTAMP:'+icsUTC(new Date()),
+    'DTSTART:'+icsLocal(wake),'DURATION:PT5M','SUMMARY:Wake — Sleep Planner',
+    'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Wake up','TRIGGER:PT0M','END:VALARM',
+    'END:VEVENT','END:VCALENDAR'
+  ].join('\r\n');
+}
+$('#alarmBtn').onclick = ()=>{
+  const c = compute();
+  const mins = Math.round((c.wake.getTime() - new Date().getTime())/6e4);
+  if(mins <= 0){ alert('Wake time already passed.'); return; }
+  location.href = 'shortcuts://run-shortcut?name=Sleep%20Wake&input=text&text=' + mins;
+};
+$('#icsBtn').onclick = (e)=>{
+  e.preventDefault();
+  const c = compute();
+  location.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(buildICS(c.wake));
+};
 
 // init preset pressed state
 $('#pMin').setAttribute('aria-pressed', D.sleepH===5.5 && !D.customH);
