@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b1020">
+<title>Sleep Planner</title>
+<link rel="manifest" href="manifest.webmanifest">
+<style>
+  :root{
+    --bg:#0b1020; --panel:#141a30; --panel2:#1b2242; --ink:#e8ecff; --muted:#8b93b8;
+    --accent:#6ea8fe; --good:#3ddc97; --warn:#ffb454; --bad:#ff5d73; --line:#26305a;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:radial-gradient(1200px 800px at 50% -10%, #16204a 0%, var(--bg) 55%);
+    color:var(--ink); font:16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased; padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    max-width:520px; margin:0 auto; display:flex; flex-direction:column; gap:16px; min-height:100%;
+  }
+  h1{font-size:18px; font-weight:700; margin:16px 0 0; letter-spacing:.3px}
+  h1 span{color:var(--muted); font-weight:500}
+  .modes{display:flex; gap:8px}
+  .modes button{
+    flex:1; padding:10px; border:1px solid var(--line); background:var(--panel); color:var(--muted);
+    border-radius:12px; font-weight:600; font-size:14px;
+  }
+  .modes button[aria-pressed="true"]{background:var(--panel2); color:var(--ink); border-color:var(--accent)}
+
+  .count{
+    background:var(--panel); border:1px solid var(--line); border-radius:20px; padding:22px 18px;
+    text-align:center;
+  }
+  .count .label{color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:1.2px}
+  .count .big{font-size:56px; font-weight:800; line-height:1.05; margin:8px 0 2px; font-variant-numeric:tabular-nums}
+  .count .sub{color:var(--muted); font-size:14px}
+  .count.good .big{color:var(--good)} .count.warn .big{color:var(--warn)} .count.bad .big{color:var(--bad)}
+
+  .times{display:grid; grid-template-columns:1fr 1fr; gap:10px}
+  .tile{background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:12px 14px}
+  .tile .k{color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.8px}
+  .tile .v{font-size:24px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px}
+  .tile.hi{border-color:var(--accent)}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:14px; display:flex; flex-direction:column; gap:12px}
+  .row{display:flex; align-items:center; justify-content:space-between; gap:12px}
+  .row label{color:var(--muted); font-size:14px}
+  input[type=time],input[type=number]{
+    background:var(--panel2); border:1px solid var(--line); color:var(--ink); border-radius:10px;
+    padding:9px 10px; font-size:16px; width:120px; text-align:right;
+  }
+  input[type=number]{width:84px}
+  .presets{display:flex; gap:8px}
+  .presets button{
+    flex:1; padding:9px; border:1px solid var(--line); background:var(--panel2); color:var(--muted);
+    border-radius:10px; font-weight:600; font-size:14px;
+  }
+  .presets button[aria-pressed="true"]{color:var(--ink); border-color:var(--good)}
+  details summary{color:var(--muted); font-size:13px; cursor:pointer; list-style:none}
+  details summary::-webkit-details-marker{display:none}
+  .hint{color:var(--muted); font-size:12px; text-align:center; padding-bottom:10px}
+  .hide{display:none !important}
+</style>
+</head>
+<body>
+  <h1>Sleep Planner <span id="modeName">· trip night</span></h1>
+
+  <div class="modes">
+    <button id="mNormal" aria-pressed="false">Normal night</button>
+    <button id="mTrip" aria-pressed="true">Trip night</button>
+  </div>
+
+  <div class="count" id="count">
+    <div class="label">Be asleep in</div>
+    <div class="big" id="cdBig">—</div>
+    <div class="sub" id="cdSub">set your times below</div>
+  </div>
+
+  <div class="times">
+    <div class="tile" id="tileWake"><div class="k">Wake / alarm</div><div class="v" id="wakeV">—</div></div>
+    <div class="tile hi"><div class="k">Be asleep by</div><div class="v" id="sleepV">—</div></div>
+  </div>
+
+  <div class="card">
+    <div class="row">
+      <label>Sleep target</label>
+      <div class="presets">
+        <button data-h="5.5" id="pMin" aria-pressed="true">Min 5½h</button>
+        <button data-h="8" id="pFull" aria-pressed="false">Full 8h</button>
+      </div>
+    </div>
+
+    <!-- TRIP fields -->
+    <div id="tripFields" class="card" style="padding:0;border:0;gap:12px">
+      <div class="row"><label>Arrival time</label><input type="time" id="arrival" value="09:30"></div>
+      <div class="row"><label>Travel (Waze min)</label><input type="number" id="travel" min="0" value="50"></div>
+      <div class="row"><label>Prep buffer (min)</label><input type="number" id="prep" min="0" value="10"></div>
+      <div class="row"><label>Wake-early margin (min)</label><input type="number" id="margin" min="0" value="20"></div>
+    </div>
+
+    <!-- NORMAL fields -->
+    <div id="normalFields" class="card hide" style="padding:0;border:0;gap:12px">
+      <div class="row"><label>Wake time</label><input type="time" id="wakeTime" value="07:00"></div>
+    </div>
+
+    <details>
+      <summary>Advanced</summary>
+      <div class="row" style="margin-top:10px"><label>Fall-asleep lag (min)</label><input type="number" id="lag" min="0" value="15"></div>
+      <div class="row"><label>Custom sleep (h)</label><input type="number" id="customH" min="0" step="0.5" placeholder="off"></div>
+    </details>
+  </div>
+
+  <div class="hint">Backward math. No account. Data stays on this device.</div>
+
+<script>
+const $ = s => document.querySelector(s);
+const state = JSON.parse(localStorage.getItem('sp') || '{}');
+const D = {
+  mode: state.mode || 'trip',
+  sleepH: state.sleepH ?? 5.5,
+  arrival: state.arrival || '09:30',
+  travel: state.travel ?? 50,
+  prep: state.prep ?? 10,
+  margin: state.margin ?? 20,
+  wakeTime: state.wakeTime || '07:00',
+  lag: state.lag ?? 15,
+  customH: state.customH ?? null,
+};
+
+function save(){ localStorage.setItem('sp', JSON.stringify(D)); }
+function pad(n){ return String(n).padStart(2,'0'); }
+function fmt(d){ return pad(d.getHours())+':'+pad(d.getMinutes()); }
+
+// parse "HH:MM" -> Date today (or tomorrow logic handled at compute)
+function atTime(hhmm){
+  const [h,m] = hhmm.split(':').map(Number);
+  const d = new Date(); d.setHours(h,m,0,0); return d;
+}
+
+function compute(){
+  const now = new Date();
+  const effSleepH = (D.customH && D.customH>0) ? D.customH : D.sleepH;
+  let wake;
+
+  if(D.mode==='trip'){
+    // arrival is a clock time; assume it's the NEXT occurrence (today if still ahead, else tomorrow)
+    let arr = atTime(D.arrival);
+    if(arr <= now) arr = new Date(arr.getTime()+864e5); // next day
+    const leaveMs = arr.getTime() - D.travel*6e4;
+    wake = new Date(leaveMs - (D.prep + D.margin)*6e4);
+  } else {
+    let w = atTime(D.wakeTime);
+    if(w <= now) w = new Date(w.getTime()+864e5);
+    wake = w;
+  }
+
+  const asleepBy = new Date(wake.getTime() - effSleepH*36e5);
+  const bedNow   = new Date(asleepBy.getTime() - D.lag*6e4); // start trying to sleep
+  const msLeft   = bedNow.getTime() - now.getTime();
+
+  return { wake, asleepBy, bedNow, msLeft, effSleepH };
+}
+
+function render(){
+  const c = compute();
+  $('#wakeV').textContent = fmt(c.wake);
+  $('#sleepV').textContent = fmt(c.asleepBy);
+
+  const box = $('#count'), big = $('#cdBig'), sub = $('#cdSub');
+  box.classList.remove('good','warn','bad');
+
+  if(c.msLeft <= 0){
+    big.textContent = 'NOW';
+    sub.textContent = 'past bedtime — go. lights off.';
+    box.classList.add('bad');
+  } else {
+    const mins = Math.floor(c.msLeft/6e4);
+    const h = Math.floor(mins/60), m = mins%60;
+    big.textContent = (h>0? h+'h ' : '') + m + 'm';
+    sub.textContent = 'lights off by ' + fmt(c.bedNow) + ' · sleep ' + c.effSleepH + 'h';
+    if(mins <= 15) box.classList.add('bad');
+    else if(mins <= 45) box.classList.add('warn');
+    else box.classList.add('good');
+  }
+}
+
+// --- wiring ---
+function setMode(m){
+  D.mode = m; save();
+  $('#mTrip').setAttribute('aria-pressed', m==='trip');
+  $('#mNormal').setAttribute('aria-pressed', m==='normal');
+  $('#tripFields').classList.toggle('hide', m!=='trip');
+  $('#normalFields').classList.toggle('hide', m==='trip');
+  $('#modeName').textContent = '· ' + (m==='trip'?'trip night':'normal night');
+  render();
+}
+function setPreset(h){
+  D.sleepH = h; D.customH = null; $('#customH').value=''; save();
+  $('#pMin').setAttribute('aria-pressed', h===5.5);
+  $('#pFull').setAttribute('aria-pressed', h===8);
+  render();
+}
+
+$('#mTrip').onclick   = ()=>setMode('trip');
+$('#mNormal').onclick = ()=>setMode('normal');
+$('#pMin').onclick    = ()=>setPreset(5.5);
+$('#pFull').onclick   = ()=>setPreset(8);
+
+const bind = (id,key,num)=>{ const el=$(id); el.value = D[key] ?? ''; el.oninput=()=>{ D[key] = num? (el.value===''?null:Number(el.value)) : el.value; save(); render(); }; };
+bind('#arrival','arrival',false);
+bind('#travel','travel',true);
+bind('#prep','prep',true);
+bind('#margin','margin',true);
+bind('#wakeTime','wakeTime',false);
+bind('#lag','lag',true);
+bind('#customH','customH',true);
+
+// init preset pressed state
+$('#pMin').setAttribute('aria-pressed', D.sleepH===5.5 && !D.customH);
+$('#pFull').setAttribute('aria-pressed', D.sleepH===8 && !D.customH);
+
+setMode(D.mode);
+render();
+setInterval(render, 1000*15); // tick every 15s; minute-resolution display
+
+if('serviceWorker' in navigator){ navigator.serviceWorker.register('sw.js').catch(()=>{}); }
+</script>
+</body>
+</html>
