@@ -34,6 +34,7 @@
   }
   .count .label{color:var(--muted); font-size:13px; text-transform:uppercase; letter-spacing:1.2px}
   .count .big{font-size:56px; font-weight:800; line-height:1.05; margin:8px 0 2px; font-variant-numeric:tabular-nums}
+  .count .big.split{font-size:38px}
   .count .sub{color:var(--muted); font-size:14px}
   .count.good .big{color:var(--good)} .count.warn .big{color:var(--warn)} .count.bad .big{color:var(--bad)}
 
@@ -81,6 +82,12 @@
     border-radius:999px; padding:7px 14px; font-weight:700; font-size:14px; font-variant-numeric:tabular-nums; min-width:66px;
   }
   .op[aria-pressed="true"]{color:var(--bg); background:var(--good); border-color:var(--good)}
+  .opright{display:flex; align-items:center; gap:8px}
+  .moon{
+    border:1px solid var(--line); background:var(--panel2); border-radius:999px;
+    padding:6px 9px; font-size:14px; opacity:.35; filter:grayscale(1);
+  }
+  .moon[aria-pressed="true"]{opacity:1; filter:none; border-color:var(--accent); background:#1a2350}
   #alarmHelp summary{color:var(--muted); font-size:12px; cursor:pointer; list-style:none; text-align:center}
   #alarmHelp summary::-webkit-details-marker{display:none}
   #alarmHelp ol{color:var(--muted); font-size:13px; padding-left:20px; margin:8px 0}
@@ -171,12 +178,16 @@ const D = {
   arrival: state.arrival || '09:30',
   travel: state.travel ?? 50,
   ops: Object.assign({ margin:true }, state.ops || { shower:true, lunch:false, bathroom:true }),
+  tonight: state.tonight || {},   // ops monke could knock out tonight (preview only)
   wakeTime: state.wakeTime || '07:00',
   lag: state.lag ?? 15,
   customH: state.customH ?? null,
 };
 
-function prepMins(){ return OPS.reduce((s,o)=> s + (D.ops[o.id] ? o.min : 0), 0); }
+// morning prep. excludeTonight = pretend the 🌙-flagged ops are already done → less morning time.
+function prepSum(excludeTonight){ return OPS.reduce((s,o)=> (D.ops[o.id] && !(excludeTonight && D.tonight[o.id])) ? s+o.min : s, 0); }
+function prepMins(){ return prepSum(false); }
+function anyTonight(){ return OPS.some(o=> D.ops[o.id] && D.tonight[o.id]); }
 
 function save(){ localStorage.setItem('sp', JSON.stringify(D)); }
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -188,7 +199,8 @@ function atTime(hhmm){
   const d = new Date(); d.setHours(h,m,0,0); return d;
 }
 
-function compute(){
+function compute(prepM){
+  if(prepM === undefined) prepM = prepMins();
   const now = new Date();
   const effSleepH = (D.customH && D.customH>0) ? D.customH : D.sleepH;
   let wake;
@@ -198,7 +210,7 @@ function compute(){
     let arr = atTime(D.arrival);
     if(arr <= now) arr = new Date(arr.getTime()+864e5); // next day
     const leaveMs = arr.getTime() - D.travel*6e4;
-    wake = new Date(leaveMs - prepMins()*6e4);
+    wake = new Date(leaveMs - prepM*6e4);
   } else {
     let w = atTime(D.wakeTime);
     if(w <= now) w = new Date(w.getTime()+864e5);
@@ -226,8 +238,15 @@ function render(){
 
   const box = $('#count'), big = $('#cdBig'), sub = $('#cdSub'), label = $('#cdLabel');
   box.classList.remove('good','warn','bad');
+  big.classList.remove('split');
 
   const hm = ms => { const t=Math.max(0,Math.round(ms/6e4)); return (t>=60?Math.floor(t/60)+'h ':'')+(t%60)+'m'; };
+  const fmtLeft = ms => ms <= 0 ? 'NOW' : hm(ms);
+
+  // scenario B: if monke does the 🌙 ops tonight → less morning prep → later deadline → more runway now
+  const cB = anyTonight() ? compute(prepSum(true)) : c;
+  const gainMs = cB.msLeft - c.msLeft;
+  const showSplit = anyTonight() && gainMs > 0;
 
   if(c.msLeft <= 0){
     box.classList.add('bad');
@@ -249,12 +268,16 @@ function render(){
       big.textContent = '−' + hm(defMs);
       sub.textContent = 'NOW · crash now → only ' + hm(sleepMs) + ' vs ' + c.effSleepH + 'h';
     }
+    if(showSplit) sub.textContent += ' · do 🌙 now → ' + fmtLeft(cB.msLeft) + ' back';
   } else {
     label.textContent = 'Be asleep in';
+    big.textContent = fmtLeft(c.msLeft) + (showSplit ? ' / ' + fmtLeft(cB.msLeft) : '');
+    big.classList.toggle('split', showSplit);
+    if(showSplit)
+      sub.textContent = 'now / if you do 🌙 tonight (+' + hm(gainMs) + ' later bed)';
+    else
+      sub.textContent = 'lights off by ' + fmt(c.bedNow) + ' · sleep ' + c.effSleepH + 'h';
     const mins = Math.floor(c.msLeft/6e4);
-    const h = Math.floor(mins/60), m = mins%60;
-    big.textContent = (h>0? h+'h ' : '') + m + 'm';
-    sub.textContent = 'lights off by ' + fmt(c.bedNow) + ' · sleep ' + c.effSleepH + 'h';
     if(mins <= 15) box.classList.add('bad');
     else if(mins <= 45) box.classList.add('warn');
     else box.classList.add('good');
@@ -293,10 +316,21 @@ function renderOps(){
   OPS.forEach(o=>{
     const row = document.createElement('div'); row.className='oprow';
     const lab = document.createElement('div'); lab.className='oplabel'; lab.textContent=o.label;
+
+    const moon = document.createElement('button'); moon.className='moon'; moon.textContent='🌙';
+    moon.title='Do tonight (before bed)';
+    moon.setAttribute('aria-pressed', !!D.tonight[o.id]);
+
     const btn = document.createElement('button'); btn.className='op'; btn.textContent='+'+o.min+'m';
     btn.setAttribute('aria-pressed', !!D.ops[o.id]);
-    btn.onclick = ()=>{ D.ops[o.id] = !D.ops[o.id]; btn.setAttribute('aria-pressed', D.ops[o.id]); save(); render(); };
-    row.append(lab, btn); wrap.append(row);
+
+    const syncMoon = ()=>{ moon.classList.toggle('hide', !D.ops[o.id]); };
+    btn.onclick  = ()=>{ D.ops[o.id] = !D.ops[o.id]; btn.setAttribute('aria-pressed', D.ops[o.id]); syncMoon(); save(); render(); };
+    moon.onclick = ()=>{ D.tonight[o.id] = !D.tonight[o.id]; moon.setAttribute('aria-pressed', D.tonight[o.id]); save(); render(); };
+    syncMoon();
+
+    const right = document.createElement('div'); right.className='opright'; right.append(moon, btn);
+    row.append(lab, right); wrap.append(row);
   });
 }
 renderOps();
