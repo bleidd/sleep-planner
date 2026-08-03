@@ -72,6 +72,15 @@
   .alarmRow{display:flex; gap:10px}
   .alarmRow .alarm{flex:1; text-align:center; text-decoration:none; display:flex; align-items:center; justify-content:center; gap:6px}
   a.alarm.ics{border-color:var(--good); color:var(--ink)}
+  .prep-head{display:flex; justify-content:space-between; color:var(--muted); font-size:14px; margin-bottom:6px}
+  .prep-head span:last-child{color:var(--ink); font-weight:700; font-variant-numeric:tabular-nums}
+  .oprow{display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0}
+  .oprow .oplabel{font-size:15px}
+  .op{
+    border:1px solid var(--line); background:var(--panel2); color:var(--muted);
+    border-radius:999px; padding:7px 14px; font-weight:700; font-size:14px; font-variant-numeric:tabular-nums; min-width:66px;
+  }
+  .op[aria-pressed="true"]{color:var(--bg); background:var(--good); border-color:var(--good)}
   #alarmHelp summary{color:var(--muted); font-size:12px; cursor:pointer; list-style:none; text-align:center}
   #alarmHelp summary::-webkit-details-marker{display:none}
   #alarmHelp ol{color:var(--muted); font-size:13px; padding-left:20px; margin:8px 0}
@@ -125,7 +134,10 @@
     <div id="tripFields" class="card" style="padding:0;border:0;gap:12px">
       <div class="row"><label>Arrival time</label><input type="time" id="arrival" value="09:30"></div>
       <div class="row"><label>Travel (Waze min) <a class="waze" href="https://www.waze.com/live-map" target="_blank" rel="noopener">check Waze ↗</a></label><input type="number" id="travel" min="0" value="50"></div>
-      <div class="row"><label>Prep buffer (min)</label><input type="number" id="prep" min="0" value="10"></div>
+      <div class="prep">
+        <div class="prep-head"><span>Prep ops</span><span id="prepTotal">0m</span></div>
+        <div id="opList"></div>
+      </div>
       <div class="row"><label>Wake-early margin (min)</label><input type="number" id="margin" min="0" value="20"></div>
     </div>
 
@@ -146,17 +158,26 @@
 <script>
 const $ = s => document.querySelector(s);
 const state = JSON.parse(localStorage.getItem('sp') || '{}');
+
+const OPS = [
+  { id:'shower',   label:'🚿 Shower',        min:15 },
+  { id:'lunch',    label:'🥪 Pack lunch',     min:15 },
+  { id:'bathroom', label:'💩 Bathroom',       min:10 },
+];
+
 const D = {
   mode: state.mode || 'trip',
   sleepH: state.sleepH ?? 5.5,
   arrival: state.arrival || '09:30',
   travel: state.travel ?? 50,
-  prep: state.prep ?? 10,
+  ops: state.ops || { shower:true, lunch:false, bathroom:true },
   margin: state.margin ?? 20,
   wakeTime: state.wakeTime || '07:00',
   lag: state.lag ?? 15,
   customH: state.customH ?? null,
 };
+
+function prepMins(){ return OPS.reduce((s,o)=> s + (D.ops[o.id] ? o.min : 0), 0); }
 
 function save(){ localStorage.setItem('sp', JSON.stringify(D)); }
 function pad(n){ return String(n).padStart(2,'0'); }
@@ -178,7 +199,7 @@ function compute(){
     let arr = atTime(D.arrival);
     if(arr <= now) arr = new Date(arr.getTime()+864e5); // next day
     const leaveMs = arr.getTime() - D.travel*6e4;
-    wake = new Date(leaveMs - (D.prep + D.margin)*6e4);
+    wake = new Date(leaveMs - (prepMins() + D.margin)*6e4);
   } else {
     let w = atTime(D.wakeTime);
     if(w <= now) w = new Date(w.getTime()+864e5);
@@ -196,6 +217,8 @@ function render(){
   const c = compute();
   $('#wakeV').textContent = fmt(c.wake);
   $('#sleepV').textContent = fmt(c.asleepBy);
+
+  $('#prepTotal').textContent = prepMins() + 'm';
 
   const wakeMin = Math.round((c.wake.getTime() - new Date().getTime())/6e4);
   $('#alarmMins').textContent = wakeMin > 0
@@ -264,8 +287,21 @@ $('#pFull').onclick   = ()=>setPreset(8);
 const bind = (id,key,num)=>{ const el=$(id); el.value = D[key] ?? ''; el.oninput=()=>{ D[key] = num? (el.value===''?null:Number(el.value)) : el.value; save(); render(); }; };
 bind('#arrival','arrival',false);
 bind('#travel','travel',true);
-bind('#prep','prep',true);
 bind('#margin','margin',true);
+
+// prep ops list
+function renderOps(){
+  const wrap = $('#opList'); wrap.innerHTML = '';
+  OPS.forEach(o=>{
+    const row = document.createElement('div'); row.className='oprow';
+    const lab = document.createElement('div'); lab.className='oplabel'; lab.textContent=o.label;
+    const btn = document.createElement('button'); btn.className='op'; btn.textContent='+'+o.min+'m';
+    btn.setAttribute('aria-pressed', !!D.ops[o.id]);
+    btn.onclick = ()=>{ D.ops[o.id] = !D.ops[o.id]; btn.setAttribute('aria-pressed', D.ops[o.id]); save(); render(); };
+    row.append(lab, btn); wrap.append(row);
+  });
+}
+renderOps();
 bind('#wakeTime','wakeTime',false);
 bind('#lag','lag',true);
 bind('#customH','customH',true);
