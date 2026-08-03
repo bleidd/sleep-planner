@@ -172,7 +172,19 @@ function render(){
 
   if(c.msLeft <= 0){
     big.textContent = 'NOW';
-    sub.textContent = 'past bedtime — go. lights off.';
+    // sleep deficit: if lights off now, asleep after lag → actual sleep until wake
+    const now2 = new Date();
+    const sleepMs = c.wake.getTime() - (now2.getTime() + D.lag*6e4);
+    const targetMs = c.effSleepH*36e5;
+    const defMs = targetMs - sleepMs;
+    const hm = ms => { const t=Math.max(0,Math.round(ms/6e4)); return (t>=60?Math.floor(t/60)+'h ':'')+(t%60)+'m'; };
+    if(sleepMs <= 0){
+      sub.textContent = 'too late — ~0 sleep before ' + fmt(c.wake) + '. go NOW.';
+    } else if(defMs <= 0){
+      sub.textContent = 'crash now → ' + hm(sleepMs) + ' sleep. still on target. GO.';
+    } else {
+      sub.textContent = 'crash now → only ' + hm(sleepMs) + ' · deficit ' + hm(defMs) + ' vs ' + c.effSleepH + 'h';
+    }
     box.classList.add('bad');
   } else {
     const mins = Math.floor(c.msLeft/6e4);
