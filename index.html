@@ -74,7 +74,7 @@
   </div>
 
   <div class="count" id="count">
-    <div class="label">Be asleep in</div>
+    <div class="label" id="cdLabel">Be asleep in</div>
     <div class="big" id="cdBig">—</div>
     <div class="sub" id="cdSub">set your times below</div>
   </div>
@@ -169,26 +169,33 @@ function render(){
   $('#wakeV').textContent = fmt(c.wake);
   $('#sleepV').textContent = fmt(c.asleepBy);
 
-  const box = $('#count'), big = $('#cdBig'), sub = $('#cdSub');
+  const box = $('#count'), big = $('#cdBig'), sub = $('#cdSub'), label = $('#cdLabel');
   box.classList.remove('good','warn','bad');
 
+  const hm = ms => { const t=Math.max(0,Math.round(ms/6e4)); return (t>=60?Math.floor(t/60)+'h ':'')+(t%60)+'m'; };
+
   if(c.msLeft <= 0){
-    big.textContent = 'NOW';
+    box.classList.add('bad');
     // sleep deficit: if lights off now, asleep after lag → actual sleep until wake
     const now2 = new Date();
     const sleepMs = c.wake.getTime() - (now2.getTime() + D.lag*6e4);
-    const targetMs = c.effSleepH*36e5;
-    const defMs = targetMs - sleepMs;
-    const hm = ms => { const t=Math.max(0,Math.round(ms/6e4)); return (t>=60?Math.floor(t/60)+'h ':'')+(t%60)+'m'; };
+    const defMs = c.effSleepH*36e5 - sleepMs;
+
     if(sleepMs <= 0){
-      sub.textContent = 'too late — ~0 sleep before ' + fmt(c.wake) + '. go NOW.';
+      label.textContent = 'Too late';
+      big.textContent = 'NO SLEEP';
+      sub.textContent = '~0 before ' + fmt(c.wake) + '. lights off NOW.';
     } else if(defMs <= 0){
-      sub.textContent = 'crash now → ' + hm(sleepMs) + ' sleep. still on target. GO.';
+      label.textContent = 'Be asleep in';
+      big.textContent = 'NOW';
+      sub.textContent = 'crash now → ' + hm(sleepMs) + '. still on target. GO.';
     } else {
-      sub.textContent = 'crash now → only ' + hm(sleepMs) + ' · deficit ' + hm(defMs) + ' vs ' + c.effSleepH + 'h';
+      label.textContent = 'Sleep deficit if you stall';
+      big.textContent = '−' + hm(defMs);
+      sub.textContent = 'NOW · crash now → only ' + hm(sleepMs) + ' vs ' + c.effSleepH + 'h';
     }
-    box.classList.add('bad');
   } else {
+    label.textContent = 'Be asleep in';
     const mins = Math.floor(c.msLeft/6e4);
     const h = Math.floor(mins/60), m = mins%60;
     big.textContent = (h>0? h+'h ' : '') + m + 'm';
